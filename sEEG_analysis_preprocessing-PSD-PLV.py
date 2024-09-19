@@ -20,6 +20,158 @@ import random
 
 path_on_the_computer = '' #!!! To write your path
 
+# %% TWO IMPORTANT FUNCTIONS
+
+# def find_events_eeg(folder, how_much_triggers_to_practice):
+def find_events_eeg(folder):
+    ### FILE UPLOADER
+    raw_data           = mne.io.read_raw_edf(folder) 
+    # raw_data.plot()
+    info               = raw_data.info
+    raw                = raw_data.copy().pick(picks=['MKR2+']) 
+    
+    channel_name       = 'MKR2+'
+    channel_index      = raw.ch_names.index(channel_name)
+    # raw.plot()
+    
+    # Get the data from the channel
+    data               = raw.get_data(picks=channel_index)
+    
+    # Find the index of the maximum amplitude
+    # np.min(np.abs(data))
+    # np.max(np.abs(data))
+    
+    # Amplitude min = -4.99519e-05; amplitude max = 5.00496e-05
+    max_amplitude_index        = []
+    for idx in range((np.shape(data))[1]) :
+        if np.abs(data[0][idx]) > 5.05e-05:
+            max_amplitude_index.append(idx)
+            
+    ### CHECK IN SECONDS
+    second                     = []
+    idx                        = 0
+    for idx in range(len(max_amplitude_index)):
+        seconds                = max_amplitude_index[idx] / info['sfreq']                    
+        second.append(seconds)
+    second_np                  = np.array(second)
+    
+    ### CHECKER
+    # raw.plot(duration = 3, start = second[10]) 
+    
+    ### DIFFERENCE FINDER
+    second_np                  = pd.DataFrame(second_np)
+    dur                        = second_np.diff()
+    dur_sort                   = dur.sort_values(by=0,  ascending=False)
+    
+    ### CHECKER
+    dur_sort_np                = np.array(dur_sort)
+    print("View greater than 55: ", sum(dur_sort_np > 55))
+    
+    ### OMITTER of the values less than 1
+    dur_sort_omit              = dur_sort[dur_sort[0] > 1]
+    dur_sort_omit_sorted       = dur_sort_omit.sort_index()
+    
+    ### FILTER THE PRACTICE OUT
+    # dur_sort_omit_sorted_experiment    = dur_sort_omit_sorted.tail(-how_much_triggers_to_practice)
+    dur_sort_omit_sorted_experiment    = dur_sort_omit_sorted.tail(73) ## FOR ALL
+    # dur_sort_omit_sorted_experiment    = dur_sort_omit_sorted.tail(72) ### PUZ
+
+    dur_sort_omit_sorted_experiment_np = np.array(dur_sort_omit_sorted_experiment)
+    
+    # dur_sort_omit_sorted_experiment_np = np.array(dur_sort_omit_sorted) #for SPIZIN
+    
+    ### CREATING A DATAFRAME WITH STARTING INDEX FOR EACH DURATION
+    index_list                 = dur_sort_omit_sorted_experiment.index[:]
+    ind_list                   = []
+    sample_with_trigges        = []
+    idx                        = 0
+    
+    for idx in range(len(index_list)):
+        ind                    = index_list[idx]           
+        ind_int                = int(ind)       #FOR S   
+        # ind_list.append(ind_int)
+        sample_of_trigger      = max_amplitude_index[ind_int]
+        sample_with_trigges.append(sample_of_trigger)
+    
+    triggers_df                = pd.DataFrame(sample_with_trigges)
+    triggers_df['Labels']      = triggers_df[0]
+    triggers_df['Time_in_sec'] = triggers_df[0] #### SPIZIN STOPS HERE!!!! 
+    
+    idx = 0
+    for idx in range(len(triggers_df)):
+        triggers_df.loc[idx-1, 'Time_in_sec'] = float(dur_sort_omit_sorted_experiment_np[idx])
+    
+    df_r             = triggers_df
+    # Deleting the last row
+    last_row         = len(df_r)
+    df               = df_r.drop(df_r.index[last_row-1])
+    last_row         = len(df) #!!! cancel for SPIZING
+    df               = df.drop(df_r.index[last_row-1]) #!!! cancel for SPIZING
+    
+    return df, raw_data
+    
+
+### !!! THIS FUNCTION SHOULD BE CHANGED DEPENDING ON THE PSYCHOPY OUTCOME (CSV)
+def label_define(stimulus_file, df):      
+    ### LABELS LOADER
+    columns_to_us              = stimulus_file[['emotion', 'instru']] #'poryadok'
+    columns_to_us_short        = columns_to_us[8:32]
+    columns_to_us_short_np     = np.array(columns_to_us_short)
+    len(columns_to_us_short_np)
+    
+    trigger_label              = []
+    trigger_label_mov          = []
+    trigger_label_scale        = []
+    idx = 0
+    for idx in range(len(columns_to_us_short_np)):
+        if ((columns_to_us_short_np[idx, 0] == 'pos') and 
+            (columns_to_us_short_np[idx, 1] == 'Просто смотрите')):
+            label              = 11
+            label_m            = 12
+            label_s            = 13
+        if ((columns_to_us_short_np[idx, 0] == 'pos') and 
+            (columns_to_us_short_np[idx, 1] == 'Подавляйте')):
+            label              = 21
+            label_m            = 22
+            label_s            = 23
+        if ((columns_to_us_short_np[idx, 0] == 'pos') and 
+            (columns_to_us_short_np[idx, 1] == 'Переоцените')):
+            label              = 31
+            label_m            = 32
+            label_s            = 33
+        if ((columns_to_us_short_np[idx, 0] == 'neu') and 
+            (columns_to_us_short_np[idx, 1] == 'Просто смотрите')):
+            label              = 71
+            label_m            = 72
+            label_s            = 73
+    
+        trigger_label.append(label)
+        trigger_label_mov.append(label_m)
+        trigger_label_scale.append(label_s)
+    
+    ### ASSIGNING LABELS
+    # INSERT LABELS 
+    # df_new_line = pd.DataFrame([[4675073,8888,1]], columns=[0,'Labels','Time_in_sec'] )
+    # triggers_df = pd.concat([df,df_new_line], ignore_index=True)
+    
+    triggers_df      = df
+    triggers_df.iloc[0::3, 1] = 88
+    triggers_df.iloc[1::3, 1] = 888
+    triggers_df.iloc[2::3, 1] = 8888
+    
+    df = triggers_df
+    df.loc[df.Labels == 88, 'Labels'] = trigger_label
+    df.loc[df.Labels == 888, 'Labels'] = trigger_label_mov
+    df.loc[df.Labels == 8888, 'Labels'] = trigger_label_scale
+    
+    ### CREATE EVENT TABLE
+    trigger_table    = df[[0,'Labels']]
+    trigger_table.insert(1,'immediately preceding sample', 0)
+    events           = np.array(trigger_table)
+    
+    return events
+
+
 # %% STEP 0 
 
 # #!!! Manual input
@@ -173,7 +325,7 @@ def prepare_data(subject):
 
     # LABELLING 
     os.chdir(path_on_the_computer)
-    from Step_0_Peak_finder_2 import find_events_eeg, label_define
+    
     table_with_time, raw_data        = find_events_eeg(file)
     events                           = label_define(stimulus_file, table_with_time)
 
